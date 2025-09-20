@@ -1,0 +1,15 @@
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  background-color: #0d1117;
+}
+
+#red-ui-header {
+  background: rgba(13, 17, 23, 0.95);
+}
+
+#red-ui-main-container {
+  background: rgba(1, 4, 9, 0.9);
+}

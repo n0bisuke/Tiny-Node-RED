@@ -1,0 +1,19 @@
+{
+  "name": "red-edge",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@node-red/editor-api": "^4.1.0",
+    "@node-red/editor-client": "^4.1.0",
+    "@node-red/nodes": "^4.1.0",
+    "node-red": "^4.1.0"
+  }
+}

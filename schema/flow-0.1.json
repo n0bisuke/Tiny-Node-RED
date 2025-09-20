@@ -1,0 +1,313 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/node-red-edge/schema/flow-0.1.json",
+  "title": "Edge Node-RED Flow v0.1",
+  "type": "object",
+  "required": ["id", "version", "nodes"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^0\\.1$",
+      "description": "Flow schema version. v0.1 is the only supported value for this subset."
+    },
+    "routes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/route"
+      },
+      "default": []
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/node"
+      },
+      "minItems": 1
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "jsonValue": {
+      "description": "Arbitrary JSON-compatible value.",
+      "anyOf": [
+        { "type": "null" },
+        { "type": "boolean" },
+        { "type": "number" },
+        { "type": "string" },
+        { "type": "object", "additionalProperties": true },
+        { "type": "array", "items": { "$ref": "#/$defs/jsonValue" } }
+      ]
+    },
+    "wires": {
+      "type": "array",
+      "description": "Output wiring table. Each entry represents the IDs of nodes wired from a single output port.",
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1
+        },
+        "uniqueItems": true
+      },
+      "default": []
+    },
+    "route": {
+      "type": "object",
+      "required": ["path", "entry"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^/",
+          "description": "HTTP path (Workers style) to bind."
+        },
+        "entry": {
+          "type": "string",
+          "minLength": 1,
+          "description": "ID of the entry node to invoke when this route matches."
+        },
+        "methods": {
+          "type": "array",
+          "description": "Optional HTTP methods to match. Defaults to ANY if omitted.",
+          "items": {
+            "type": "string",
+            "pattern": "^(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD|ANY)$"
+          },
+          "uniqueItems": true,
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    },
+    "node": {
+      "type": "object",
+      "required": ["id", "type", "wires", "config"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "type": "string",
+          "enum": ["inject", "debug", "fn:js", "fn:wasm", "http-in", "http-out"]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "wires": {
+          "$ref": "#/$defs/wires"
+        },
+        "config": {
+          "type": "object"
+        },
+        "meta": {
+          "type": "object",
+          "description": "Optional designer metadata (position, color, etc).",
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "type": { "const": "inject" } }
+          },
+          "then": {
+            "properties": {
+              "config": { "$ref": "#/$defs/injectConfig" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "debug" } }
+          },
+          "then": {
+            "properties": {
+              "config": { "$ref": "#/$defs/debugConfig" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "fn:js" } }
+          },
+          "then": {
+            "properties": {
+              "config": { "$ref": "#/$defs/functionJsConfig" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "fn:wasm" } }
+          },
+          "then": {
+            "properties": {
+              "config": { "$ref": "#/$defs/functionWasmConfig" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "http-in" } }
+          },
+          "then": {
+            "properties": {
+              "config": { "$ref": "#/$defs/httpInConfig" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "http-out" } }
+          },
+          "then": {
+            "properties": {
+              "config": { "$ref": "#/$defs/httpOutConfig" }
+            }
+          }
+        }
+      ]
+    },
+    "injectConfig": {
+      "type": "object",
+      "required": ["payload"],
+      "properties": {
+        "payload": { "$ref": "#/$defs/jsonValue" },
+        "payloadType": {
+          "type": "string",
+          "enum": ["json", "string", "number", "boolean", "null", "binary", "timestamp"],
+          "description": "Hint for how the payload should be rendered."
+        },
+        "topic": {
+          "type": "string"
+        },
+        "interval": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Optional interval in milliseconds for automatic triggering."
+        }
+      },
+      "additionalProperties": false
+    },
+    "debugConfig": {
+      "type": "object",
+      "required": ["target"],
+      "properties": {
+        "target": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Dot-notation path inside msg to display (e.g. payload)."
+        },
+        "output": {
+          "type": "string",
+          "enum": ["panel", "console", "both"],
+          "default": "panel"
+        },
+        "depth": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Optional max depth when serialising objects."
+        }
+      },
+      "additionalProperties": false
+    },
+    "functionJsConfig": {
+      "type": "object",
+      "required": ["source"],
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Synchronous JavaScript body that must return msg."
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    },
+    "functionWasmConfig": {
+      "type": "object",
+      "required": ["module"],
+      "properties": {
+        "module": {
+          "type": "string",
+          "format": "uri-reference",
+          "description": "URL or relative path to the wasm module."
+        },
+        "export": {
+          "type": "string",
+          "minLength": 1,
+          "default": "default",
+          "description": "Exported function name to invoke."
+        },
+        "abiVersion": {
+          "type": "string",
+          "default": "0.1"
+        }
+      },
+      "additionalProperties": false
+    },
+    "httpInConfig": {
+      "type": "object",
+      "required": ["method", "path"],
+      "properties": {
+        "method": {
+          "type": "string",
+          "pattern": "^(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD|ANY)$",
+          "description": "HTTP method to match. Use ANY to accept all."
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^/",
+          "description": "Worker-style pathname to match relative to /api."
+        },
+        "qs": {
+          "type": "array",
+          "description": "Optional query string keys to normalise.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "httpOutConfig": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 599,
+          "default": 200
+        },
+        "headers": {
+          "type": "object",
+          "description": "Default response headers.",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "mergeContext": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether to merge msg.context into the response body."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
