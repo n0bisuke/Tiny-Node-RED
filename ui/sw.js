@@ -89,6 +89,14 @@ const EDITOR_SETTINGS = {
       type: 'simple',
       label: 'Deploy',
     },
+    markdownEditor: {
+      mermaid: {
+        enabled: false,
+      },
+    },
+    mermaid: {
+      enabled: false,
+    },
   },
   context: [],
   paletteCategories: ['input', 'output', 'function', 'advanced'],
@@ -311,12 +319,21 @@ async function handleApiRequest(request, url) {
     return methodNotAllowed();
   }
 
-  if (path === 'red/images/deploy-full-o.svg' && request.method === 'GET') {
-    return fetch('./vendor/editor-client/red/images/deploy-full-o.svg');
+  if (path.startsWith('red/images/')) {
+    const asset = path.substring('red/images/'.length);
+    return fetch(`./vendor/editor-client/red/images/${asset}`);
   }
 
-  if (path === 'red/images/spin.svg' && request.method === 'GET') {
-    return fetch('./vendor/editor-client/red/images/spin.svg');
+  if (path.startsWith('icons/node-red/')) {
+    const asset = path.substring('icons/node-red/'.length);
+    return fetch(`./vendor/editor-client/red/images/icons/${asset}`);
+  }
+
+  if (path.startsWith('vendor/mermaid/')) {
+    return new Response('window.mermaid=undefined;', {
+      status: 200,
+      headers: { 'content-type': 'application/javascript; charset=utf-8' },
+    });
   }
 
   if (path === 'plugins') {
