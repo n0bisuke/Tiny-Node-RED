@@ -58,7 +58,9 @@ const EDITOR_SETTINGS = {
   httpNodeRoot: '/api',
   version: 'edge-0.1.0',
   user: {
-    anonymous: true,
+    anonymous: false,
+    username: 'edge',
+    permissions: '*',
   },
   editorTheme: {
     tours: false,
@@ -205,7 +207,10 @@ self.addEventListener('message', (event) => {
   if (!data || typeof data !== 'object') return;
   switch (data.type) {
     case 'comms-connect':
-      if (clientId) connectedClients.add(clientId);
+      if (clientId) {
+        connectedClients.add(clientId);
+        sendInitialRuntimeState(clientId);
+      }
       break;
     case 'comms-disconnect':
       if (clientId) connectedClients.delete(clientId);
@@ -270,6 +275,23 @@ function rebuildFlowIndex() {
 
 rebuildFlowIndex();
 
+function applyFlowDeployment(payload, options = {}) {
+  if (!payload || !Array.isArray(payload.flows)) {
+    return { ok: false };
+  }
+  flowState = {
+    flows: payload.flows,
+    credentials: payload.credentials || {},
+    rev: createRevision(),
+  };
+  rebuildFlowIndex();
+  const info = { revision: flowState.rev };
+  if (options.broadcast !== false) {
+    broadcastComms('notification/runtime-deploy', info);
+  }
+  return { ok: true, info };
+}
+
 async function handleApiRequest(request, url) {
   const path = url.pathname.slice(API_ROOT.length);
   if (request.method === 'OPTIONS') {
@@ -292,6 +314,21 @@ async function handleApiRequest(request, url) {
   }
 
   if (path === 'settings/user') {
+  if (path === 'auth/login') {
+    if (request.method === 'POST') {
+      return jsonResponse({ ok: true, user: EDITOR_SETTINGS.user });
+    }
+    return methodNotAllowed();
+  }
+
+  if (path === 'auth/logout' && request.method === 'POST') {
+    return jsonResponse({ ok: true });
+  }
+
+  if (path === 'auth/token' && request.method === 'POST') {
+    return jsonResponse({ ok: true, access_token: '', expires_in: 0 });
+  }
+
     if (request.method === 'GET') {
       return jsonResponse(userSettings || {});
     }
@@ -389,20 +426,41 @@ async function handleApiRequest(request, url) {
     if (request.method === 'POST') {
       try {
         const payload = await request.json();
-        if (!payload || !Array.isArray(payload.flows)) {
+        const result = applyFlowDeployment(payload);
+        if (!result.ok) {
           return textResponse('Invalid flow payload', 400);
         }
-        flowState = {
-          flows: payload.flows,
-          credentials: payload.credentials || {},
-          rev: createRevision(),
-        };
-        rebuildFlowIndex();
-        broadcastComms('notification/runtime-deploy', { revision: flowState.rev });
-        return jsonResponse({ rev: flowState.rev });
+        return jsonResponse({ rev: result.info.revision });
       } catch (error) {
         return textResponse('Invalid JSON', 400);
       }
+    }
+    return methodNotAllowed();
+  }
+
+  if (path === 'deploy') {
+    if (request.method === 'GET') {
+      return jsonResponse({ rev: flowState.rev });
+    }
+    if (request.method === 'PUT' || request.method === 'POST') {
+      let payload = null;
+      if (request.headers.get('content-type')?.includes('application/json')) {
+        try {
+          const raw = await request.text();
+          payload = raw ? JSON.parse(raw) : null;
+        } catch (error) {
+          return textResponse('Invalid JSON', 400);
+        }
+      }
+      if (payload && Array.isArray(payload.flows)) {
+        const result = applyFlowDeployment(payload);
+        if (!result.ok) {
+          return textResponse('Invalid flow payload', 400);
+        }
+        return jsonResponse({ ok: true, rev: result.info.revision });
+      }
+      broadcastComms('notification/runtime-deploy', { revision: flowState.rev });
+      return jsonResponse({ ok: true, rev: flowState.rev });
     }
     return methodNotAllowed();
   }
@@ -639,13 +697,27 @@ function cloneForTransfer(value) {
   }
 }
 
+function sendCommsToClient(clientId, topic, data) {
+  if (!clientId) return;
+  self.clients.get(clientId).then((client) => {
+    if (client) {
+      client.postMessage({ type: 'comms-message', topic, data });
+    }
+  }).catch(() => {});
+}
+
+function sendInitialRuntimeState(clientId) {
+  sendCommsToClient(clientId, 'notification/runtime-state', { state: 'start' });
+  sendCommsToClient(clientId, 'status/runtime', { text: 'edge-runtime', fill: 'green', shape: 'dot' });
+  sendCommsToClient(clientId, 'notification/runtime-deploy', { revision: flowState.rev });
+}
+
 function broadcastComms(topic, data) {
-  if (!connectedClients.size) return;
   self.clients
     .matchAll({ includeUncontrolled: true, type: 'window' })
     .then((clientList) => {
       for (const client of clientList) {
-        if (connectedClients.has(client.id)) {
+        if (connectedClients.size === 0 || connectedClients.has(client.id)) {
           client.postMessage({ type: 'comms-message', topic, data });
         }
       }

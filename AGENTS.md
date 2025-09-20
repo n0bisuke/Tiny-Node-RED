@@ -32,14 +32,29 @@
   - **Service Worker** が `/ui/api/*` をインターセプトし、フロー実行（ブラウザ内）とパネル表示を仲介。 [oai_citation:5‡MDNウェブドキュメント](https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerGlobalScope/fetch_event?utm_source=chatgpt.com)  
   - **Wasm** ローダで「安全・高速」な処理スロットを確保（`instantiateStreaming`の基本形）。 [oai_citation:6‡MDNウェブドキュメント](https://developer.mozilla.org/ja/docs/WebAssembly/Reference/JavaScript_interface/instantiateStreaming_static?utm_source=chatgpt.com)
 
+#### Phase 1 フォローアップ計画
+- Deploy ボタンを動作させるため、`/ui/api/settings` で匿名ユーザーに `deploy.write` 権限を付与し、`/auth/login` 系エンドポイントはスタブ応答で済ませる。
+- `RED.runtime.init()` で必要となる通知イベントを Service Worker から擬似送信し、未実装部分は安全にスキップできるようにする。
+- `POST /ui/api/flows` に加え、将来の Workers 連携を見据えた `/ui/api/deploy` スタブを用意し、デプロイ完了イベント (`notification/runtime-deploy`) を UI に返す。
+
 ### Phase 2 — **Function**
 - **Functionノード（fn:js）**: `return msg;` を基本とする同期JS処理。Node-REDの関数ノードの“書き方”に沿うが、**同期・副作用なし**に制限。 [oai_citation:7‡nodered.org](https://nodered.org/docs/user-guide/writing-functions?utm_source=chatgpt.com)  
 - **Wasm実行（任意）**: `process(ArrayBuffer) -> ArrayBuffer` の極小ABIで、バイナリ処理用スロットを追加（UI側は .wasm を選択して紐付け）。
+
+#### Phase 2 実装方針
+- `@node-red/nodes/core/function` の UI/ヘルプ資産を最小構成で取り込み、Ace エディタを既存のまま利用する。
+- Service Worker に関数ノード実行エンジンを実装（同期処理限定、`context/flow/global` は簡易 Map で代替）。
+- UI には Edge Subset の制約（同期処理のみ、外部モジュール不可）を明記し、警告トーストのカスタム文言を追加する。
 
 ### Phase 3 — **HTTP（ミニマムサーバ機能）**
 - **http-in / http-out** を Workers で再現：`ANY /api/*` を **fetchハンドラ**で受け、フローにルーティング → レスポンスを返す。 [oai_citation:8‡Cloudflare Docs](https://developers.cloudflare.com/workers/runtime-apis/handlers/fetch/?utm_source=chatgpt.com)  
 - **KV** へ `/deploy` で保存した「アクティブなフロー」を即反映（ホットデプロイ）。 [oai_citation:9‡Cloudflare Docs](https://developers.cloudflare.com/kv/?utm_source=chatgpt.com)  
 - （必要に応じて）**node:http互換レイヤ**を検討できるが、本サブセットではまず Workers 流のHTTPモデルを採用。 [oai_citation:10‡The Cloudflare Blog](https://blog.cloudflare.com/ja-jp/bringing-node-js-http-servers-to-cloudflare-workers/?utm_source=chatgpt.com)
+
+#### Phase 3 実装方針
+- ブラウザ UI では HTTP ノード (`http in/out`) のフォームを読み込みつつ、Service Worker 上で Cloudflare Workers 風のリクエスト/レスポンスフローを模倣する。
+- Cloudflare Workers プロジェクトを追加し、`PUT /deploy` → KV 保存 → `fetch /api/*` のパスを整える。
+- ブラウザ UI のデプロイボタンから Workers 側 `/deploy` を呼び出し、成功時に Flow を即反映させるホットデプロイを目指す。
 
 ---
 
@@ -116,6 +131,10 @@
    - `http-in`: メソッド/クエリ/パスパラ/ボディを `msg` に正規化。  
    - `http-out`: `status/headers/body` をResponseに反映。**Workersの`fetch`モデル**で実装。 [oai_citation:25‡Cloudflare Docs](https://developers.cloudflare.com/workers/runtime-apis/handlers/fetch/?utm_source=chatgpt.com)
 7. **CLI/Deploy**: wranglerの`dev/publish`フローと環境分離の手順をREADMEに記載。 [oai_citation:26‡Cloudflare Docs](https://developers.cloudflare.com/workers/wrangler/?utm_source=chatgpt.com)
+8. **Deploy UX 強化**: 匿名ユーザーに `deploy.write` 権限を与える設定レスポンスと `/ui/api/deploy` スタブを追加し、Deploy ボタンのUI連携を確認する。
+9. **Function ノード導入**: Function ノードのUI/実行環境をブラウザ内に実装し、同期処理のみ許容する制限を設ける。
+10. **HTTP ノード/Workers 連携**: HTTP ノードのフォームと実行パイプラインを整備し、Cloudflare Workers 側 `/deploy` `/api/*` ルートへ接続する。
+11. **ドキュメント & テスト**: README/PROGRESS.md に開発手順と制約を追記し、簡易E2Eテスト（Inject→Debug確認）を自動化する。
 
 ---
 

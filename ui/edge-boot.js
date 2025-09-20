@@ -40,6 +40,9 @@ function trackServiceWorkerController() {
 }
 
 function createTopicMatcher(pattern) {
+  if (typeof pattern !== 'string' || pattern.length === 0) {
+    return () => true;
+  }
   try {
     const escaped = pattern
       .replace(/([\[\]\?\(\)\\\/\$\^\*\.|])/g, '\\$1')
