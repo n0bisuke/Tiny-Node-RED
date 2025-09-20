@@ -88,7 +88,7 @@ function setupCommsBridge() {
           try {
             handler(topic, payload);
           } catch (error) {
-            console.warn('RED.comms subscriber error', error);
+            console.warn('RED.comms subscriber error', topic, payload, error);
           }
         });
       }
@@ -243,6 +243,10 @@ async function startEditor() {
   try {
     RED.init({
       apiRootUrl: API_ROOT,
+    });
+    // Ensure runtime buttons are enabled even before comms events arrive
+    RED.events.on('flows:loaded', () => {
+      RED.events.emit('runtime-state', { state: 'start', deploy: true });
     });
   } catch (error) {
     console.error('Failed to initialise RED', error);

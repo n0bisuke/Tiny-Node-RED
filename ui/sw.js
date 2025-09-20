@@ -288,6 +288,8 @@ function applyFlowDeployment(payload, options = {}) {
   const info = { revision: flowState.rev };
   if (options.broadcast !== false) {
     broadcastComms('notification/runtime-deploy', info);
+    broadcastComms('notification/runtime-state', { state: 'start', deploy: true });
+    broadcastComms('status/runtime', { text: 'edge-runtime', fill: 'green', shape: 'dot' });
   }
   return { ok: true, info };
 }
@@ -641,14 +643,21 @@ function performDebug(node, msg) {
     value = getMessageProperty(msg, property);
   }
 
+  const valueClone = cloneForTransfer(value);
+  const label = node.name || node.id;
   const payload = {
     id: node.id,
     z: node.z,
+    _alias: node._alias || label,
     path: node.__path || '',
     name: node.name || '',
+    type: node.type || 'debug',
+    label,
     topic: msg.topic || '',
     property,
-    msg: cloneForTransfer(value),
+    msg: valueClone,
+    format: inferDebugFormat(valueClone),
+    level: 'log',
   };
 
   broadcastComms('debug', payload);
@@ -679,6 +688,21 @@ function cloneMessage(msg) {
     return JSON.parse(JSON.stringify(msg));
   } catch (error) {
     return msg;
+  }
+}
+
+function inferDebugFormat(value) {
+  if (value === null || value === undefined) return 'null';
+  if (Array.isArray(value)) return 'object';
+  switch (typeof value) {
+    case 'string':
+      return 'text';
+    case 'number':
+      return 'number';
+    case 'boolean':
+      return 'boolean';
+    default:
+      return 'object';
   }
 }
 
