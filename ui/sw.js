@@ -368,6 +368,11 @@ async function handleApiRequest(request, url) {
     return fetch(`./vendor/editor-client/red/images/icons/${asset}`);
   }
 
+  if (path.startsWith('vendor/ace/')) {
+    const asset = path.substring('vendor/ace/'.length);
+    return fetch(`./vendor/editor-client/vendor/ace/${asset}`);
+  }
+
   if (path.startsWith('vendor/mermaid/')) {
     return new Response('window.mermaid=undefined;', {
       status: 200,
@@ -643,7 +648,7 @@ function performDebug(node, msg) {
     value = getMessageProperty(msg, property);
   }
 
-  const valueClone = cloneForTransfer(value);
+  const valueClone = encodeForDebug(value);
   const label = node.name || node.id;
   const payload = {
     id: node.id,
@@ -656,7 +661,7 @@ function performDebug(node, msg) {
     topic: msg.topic || '',
     property,
     msg: valueClone,
-    format: inferDebugFormat(valueClone),
+    format: inferDebugFormat(value),
     level: 'log',
   };
 
@@ -719,6 +724,38 @@ function cloneForTransfer(value) {
   } catch (error) {
     return value;
   }
+}
+
+// Encode a value roughly like RED.util.encodeObject does for basic types
+function encodeForDebug(value) {
+  if (value === undefined) {
+    return { type: 'undefined' };
+  }
+  if (value === null) {
+    return null;
+  }
+  if (Array.isArray(value)) {
+    return { type: 'array', data: value.map(encodeForDebug), length: value.length };
+  }
+  const t = typeof value;
+  if (t === 'string') return { type: 'string', data: value };
+  if (t === 'number') return { type: 'number', data: value };
+  if (t === 'bigint') return { type: 'bigint', data: String(value) };
+  if (t === 'boolean') return { type: 'boolean', data: value };
+  if (t === 'function') return { type: 'function' };
+  if (t === 'object') {
+    try {
+      // shallow encode object properties
+      const out = {};
+      for (const k of Object.keys(value)) {
+        out[k] = encodeForDebug(value[k]);
+      }
+      return out;
+    } catch (e) {
+      return { type: 'object' };
+    }
+  }
+  return { type: 'other', data: String(value) };
 }
 
 function sendCommsToClient(clientId, topic, data) {

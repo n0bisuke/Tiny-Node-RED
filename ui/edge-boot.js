@@ -248,6 +248,69 @@ async function startEditor() {
     RED.events.on('flows:loaded', () => {
       RED.events.emit('runtime-state', { state: 'start', deploy: true });
     });
+    // Guard: prevent modal/grayout freeze when widget destroy throws
+    setTimeout(() => {
+      try {
+        if (window.$) {
+          const namespaces = [$.ui, $.nodered, $.red];
+          const names = ['typedInput','editableList','checkboxSet'];
+          const guardDestroy = (w, name) => {
+            if (!w) return;
+            const proto = w.prototype || w;
+            if (proto && !proto.__edgeGuarded) {
+              const origDestroy = proto._destroy || proto.destroy;
+              if (typeof origDestroy === 'function') {
+                const wrapped = function() {
+                  try { return origDestroy.apply(this, arguments); }
+                  catch (e) { console.warn('widget destroy suppressed', name || '(widget)', e); }
+                };
+                proto._destroy = wrapped;
+                proto.destroy = wrapped;
+              }
+              proto.__edgeGuarded = true;
+            }
+          };
+          names.forEach((n)=>{
+            namespaces.forEach((ns)=>{ try { guardDestroy(ns && ns[n], n); } catch(_){} });
+            // also guard jQuery plugin bridges: $(el).typedInput('destroy') など
+            const bridge = $.fn[n];
+            if (typeof bridge === 'function' && !bridge.__edgeGuarded) {
+              const orig = bridge;
+              $.fn[n] = function(method) {
+                if (method === 'destroy') {
+                  try { return orig.apply(this, arguments); }
+                  catch (e) { console.warn('bridge destroy suppressed', n, e); return this; }
+                }
+                return orig.apply(this, arguments);
+              };
+              $.fn[n].__edgeGuarded = true;
+            }
+          });
+          // jQuery.cleanData をガード（内部で destroy が呼ばれる）
+          if ($.cleanData && !$.cleanData.__edgeGuarded) {
+            const origClean = $.cleanData;
+            $.cleanData = function(elems) {
+              try { return origClean.call(this, elems); }
+              catch (e) { console.warn('cleanData suppressed', e); }
+            };
+            $.cleanData.__edgeGuarded = true;
+          }
+        }
+        if (RED.tray && typeof RED.tray.close === 'function' && !RED.tray.__edgeGuarded) {
+          const origClose = RED.tray.close;
+          RED.tray.close = function() {
+            try { return origClose.apply(this, arguments); }
+            catch (e) {
+              console.warn('tray close suppressed', e);
+              try { $('.red-ui-tray, .red-ui-tray-shade').remove(); $('body').removeClass('red-ui-editor-tray-open'); } catch(_) {}
+            }
+          };
+          RED.tray.__edgeGuarded = true;
+        }
+      } catch (e) {
+        console.warn('install UI guards failed', e);
+      }
+    }, 0);
   } catch (error) {
     console.error('Failed to initialise RED', error);
   }
