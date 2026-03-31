@@ -8,6 +8,7 @@
 ## グローバルルール
 
 - 必ず英語で思考し、日本語で出力すること
+- npx serveやnpx node-redなどサーバー待受するようなコマンドは禁止
 
 ## 1) Mission / Non-Goals
 

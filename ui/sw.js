@@ -196,8 +196,29 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
-  if (url.origin === self.location.origin && url.pathname.startsWith(API_ROOT)) {
+  if (url.origin !== self.location.origin) return;
+
+  // Handle UI API routes
+  if (url.pathname.startsWith(API_ROOT)) {
     event.respondWith(handleApiRequest(request, url));
+    return;
+  }
+
+  // Map editor static assets requested under /ui/* to local vendor files
+  if (url.pathname.startsWith('/ui/red/images/')) {
+    const asset = url.pathname.replace('/ui/red/images/', '');
+    event.respondWith(fetch(`./vendor/editor-client/red/images/${asset}`));
+    return;
+  }
+  if (url.pathname.startsWith('/ui/icons/node-red/')) {
+    const asset = url.pathname.replace('/ui/icons/node-red/', '');
+    event.respondWith(fetch(`./vendor/editor-client/red/images/icons/${asset}`));
+    return;
+  }
+  if (url.pathname.startsWith('/ui/vendor/ace/')) {
+    const asset = url.pathname.replace('/ui/vendor/ace/', '');
+    event.respondWith(fetch(`./vendor/editor-client/vendor/ace/${asset}`));
+    return;
   }
 });
 

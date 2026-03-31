@@ -44,19 +44,18 @@ function createTopicMatcher(pattern) {
     return () => true;
   }
   try {
-    const escaped = pattern
-      .replace(/([\[\]\?\(\)\\\/\$\^\*\.|])/g, '\\$1')
-      .replace(/\+/g, '[^/]+');
-    if (escaped.endsWith('/#')) {
-      const base = escaped.slice(0, -2);
-      const regex = new RegExp(`^${base}(?:/(.*))?$`);
-      return (topic) => regex.test(topic);
+    // 1) escape all regex meta (except '/') using \$& trick
+    let p = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // 2) mqtt wildcards: '+' -> one segment, trailing '/#' -> remaining path
+    p = p.replace(/\+/g, '[^/]+');
+    if (/\/\#$/.test(p)) {
+      p = p.replace(/\/\#$/, '(?:/.*)?');
     }
-    const regex = new RegExp(`^${escaped}$`);
-    return (topic) => regex.test(topic);
+    const rx = new RegExp('^' + p + '$');
+    return (topic) => rx.test(topic);
   } catch (error) {
     console.warn('Failed to create topic matcher', pattern, error);
-    return (topic) => topic === pattern;
+    return () => true;
   }
 }
 
